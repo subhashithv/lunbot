@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Discord boxing chat game bot",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node index.js",
     "deploy": "node deployCommands.js",
@@ -11,10 +12,14 @@
   "keywords": [
     "discord",
     "bot",
-    "game"
+    "game",
+    "boxing"
   ],
   "author": "Ash",
   "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "discord.js": "^14.25.1",
     "dotenv": "^16.6.1"
