@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Crash protection
+process.on("unhandledRejection", console.error);
+process.on("uncaughtException", console.error);
+
 const {
 Client,
 GatewayIntentBits,
@@ -28,7 +32,18 @@ return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 client.once("ready",()=>{
+
 console.log(`Logged in as ${client.user.tag}`);
+console.log(`Bot connected to ${client.guilds.cache.size} servers`);
+
+
+// Heartbeat log every 5 minutes
+setInterval(()=>{
+
+console.log(`[HEARTBEAT] Bot running at ${new Date().toISOString()}`);
+
+},300000);
+
 });
 
 client.on("interactionCreate",async interaction=>{
