@@ -58,7 +58,6 @@ client.once("ready",()=>{
 console.log(`Logged in as ${client.user.tag}`);
 console.log(`Bot connected to ${client.guilds.cache.size} servers`);
 
-// Heartbeat log every 5 minutes
 setInterval(()=>{
 console.log(`[HEARTBEAT] Bot running at ${new Date().toISOString()}`);
 },300000);
@@ -139,7 +138,7 @@ ephemeral:true
 const p1 = game.players[0];
 const p2 = game.players[1];
 
-// Both moves submitted
+// BOTH MOVES SUBMITTED
 if(game.moves[p1] && game.moves[p2]){
 
 const attackerMove = game.moves[game.attacker];
@@ -157,46 +156,76 @@ winner = game.defender;
 
 game.score[winner]++;
 
-// ATTACK ANIMATION
-const attackEmbed = new EmbedBuilder()
+/* ---------------------------
+   ANNOUNCE ATTACK
+----------------------------*/
+
+await interaction.channel.send({
+embeds:[
+new EmbedBuilder()
 .setColor("#ff3b3b")
 .setTitle("⚔ Attack")
 .setDescription(`<@${game.attacker}> used **${attackerMove.toUpperCase()}**`)
-.setImage(
-animations[attackerMove === "black" ? "blackPunch" : "whitePunch"]
-);
+]
+});
 
-await interaction.channel.send({ embeds:[attackEmbed] });
+await wait(1500);
 
-await wait(2000);
+/* ---------------------------
+   ANNOUNCE DEFENSE
+----------------------------*/
 
-// DEFENSE ANIMATION
-const defendEmbed = new EmbedBuilder()
+await interaction.channel.send({
+embeds:[
+new EmbedBuilder()
 .setColor("#3b82ff")
 .setTitle("🛡 Defense")
 .setDescription(`<@${game.defender}> used **${defenderMove.toUpperCase()}**`)
-.setImage(animations[defenderMove]);
+]
+});
 
-await interaction.channel.send({ embeds:[defendEmbed] });
+await wait(1500);
 
-await wait(2000);
+/* ---------------------------
+   SHOW ONLY WINNING ANIMATION
+----------------------------*/
 
-// RESULT ANIMATION
-const resultAnim = new EmbedBuilder()
-.setColor("#ffb300")
-.setTitle(result === "attacker" ? "💥 Direct Hit!" : "🌀 Perfect Defense!")
-.setDescription(
-result === "attacker"
-? `<@${game.attacker}> lands the hit!`
-: `<@${game.defender}> successfully defends!`
+if(result === "attacker"){
+
+await interaction.channel.send({
+embeds:[
+new EmbedBuilder()
+.setColor("#ff4444")
+.setTitle("💥 Direct Hit!")
+.setDescription(`<@${game.attacker}> lands the hit!`)
+.setImage(
+animations[
+attackerMove === "black" ? "blackPunch" : "whitePunch"
+]
 )
-.setImage(result === "attacker" ? animations.attackerWin : animations.defenderWin);
+]
+});
 
-await interaction.channel.send({ embeds:[resultAnim] });
+}else{
+
+await interaction.channel.send({
+embeds:[
+new EmbedBuilder()
+.setColor("#3b82ff")
+.setTitle("🌀 Perfect Defense!")
+.setDescription(`<@${game.defender}> successfully defends!`)
+.setImage(animations[defenderMove])
+]
+});
+
+}
 
 await wait(2000);
 
-// SCOREBOARD
+/* ---------------------------
+   SCOREBOARD
+----------------------------*/
+
 const resultEmbed = new EmbedBuilder()
 .setTitle(`🥊 Round ${game.round} Result`)
 .setColor("#2a9d8f")
@@ -229,7 +258,10 @@ embeds:[resultEmbed]
 
 game.round++;
 
-// MATCH END
+/* ---------------------------
+   MATCH END
+----------------------------*/
+
 if(game.round > 5){
 
 let matchWinner;
@@ -240,7 +272,6 @@ matchWinner = p1;
 matchWinner = p2;
 }
 
-// Victory animation
 const victoryEmbed = new EmbedBuilder()
 .setColor("#ffd700")
 .setTitle("🏆 Final Victory!")
@@ -255,13 +286,10 @@ return;
 
 }
 
-// Reset moves
 resetMoves(interaction.channelId);
 
-// Wait before next round
 await wait(3000);
 
-// Start next round
 await startRound(interaction.channel,game);
 
 }
