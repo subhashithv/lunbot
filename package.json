@@ -1,0 +1,22 @@
+{
+  "name": "lunbot",
+  "version": "1.0.0",
+  "description": "Discord boxing chat game bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deployCommands.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "game"
+  ],
+  "author": "Ash",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1"
+  }
+}
