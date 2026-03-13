@@ -4,6 +4,8 @@ require("dotenv").config();
 process.on("unhandledRejection", console.error);
 process.on("uncaughtException", console.error);
 
+const express = require("express");
+
 const {
 Client,
 GatewayIntentBits,
@@ -31,17 +33,34 @@ function wait(ms){
 return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/* ===============================
+   Render Web Service Keep Alive
+================================ */
+
+const app = express();
+
+app.get("/", (req,res)=>{
+res.send("Lunbot is running");
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, ()=>{
+console.log(`Web server running on port ${PORT}`);
+});
+
+/* ===============================
+   Discord Bot
+================================ */
+
 client.once("ready",()=>{
 
 console.log(`Logged in as ${client.user.tag}`);
 console.log(`Bot connected to ${client.guilds.cache.size} servers`);
 
-
 // Heartbeat log every 5 minutes
 setInterval(()=>{
-
 console.log(`[HEARTBEAT] Bot running at ${new Date().toISOString()}`);
-
 },300000);
 
 });
