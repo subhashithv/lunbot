@@ -1,71 +1,92 @@
-const sqlite3 = require("sqlite3").verbose();
+const fs = require("fs");
 const path = require("path");
+const initSqlJs = require("sql.js");
 
-const dbPath = path.join(__dirname, "..", "data", "reminders.sqlite");
+const dbPath = process.env.REMINDER_DB_PATH || path.join(__dirname, "..", "data", "reminders.sqlite");
 
-function ensureDb() {
-  const fs = require("fs");
+let sqlModule = null;
+let sqlModulePromise = null;
+let database = null;
+let activeDbPath = null;
+
+async function loadSqlModule() {
+  if (sqlModule) {
+    return sqlModule;
+  }
+
+  if (!sqlModulePromise) {
+    sqlModulePromise = initSqlJs({
+      locateFile: (filename) => path.join(__dirname, "..", "node_modules", "sql.js", "dist", filename)
+    });
+  }
+
+  sqlModule = await sqlModulePromise;
+  return sqlModule;
+}
+
+async function ensureDb() {
+  if (database && activeDbPath === dbPath) {
+    return database;
+  }
+
+  const SQL = await loadSqlModule();
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
-  return new sqlite3.Database(dbPath, (error) => {
-    if (error) {
-      console.error("Failed to open reminder database:", error);
-    }
-  });
+  if (fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0) {
+    const fileBuffer = fs.readFileSync(dbPath);
+    database = new SQL.Database(fileBuffer);
+  } else {
+    database = new SQL.Database();
+  }
+
+  activeDbPath = dbPath;
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS reminders (
+      id TEXT PRIMARY KEY,
+      guildId TEXT NOT NULL,
+      channelId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      message TEXT NOT NULL,
+      date TEXT NOT NULL,
+      time TEXT NOT NULL,
+      targetTimestamp INTEGER NOT NULL,
+      triggerSent INTEGER NOT NULL DEFAULT 0
+    )
+  `);
+
+  persistDb();
+  return database;
 }
 
-function getDb() {
-  return ensureDb();
+function persistDb() {
+  if (!database) {
+    return;
+  }
+
+  const binary = database.export();
+  fs.writeFileSync(dbPath, Buffer.from(binary));
 }
 
-function initializeDb() {
-  const db = getDb();
-
-  db.serialize(() => {
-    db.run(`
-      CREATE TABLE IF NOT EXISTS reminders (
-        id TEXT PRIMARY KEY,
-        guildId TEXT NOT NULL,
-        channelId TEXT NOT NULL,
-        userId TEXT NOT NULL,
-        message TEXT NOT NULL,
-        date TEXT NOT NULL,
-        time TEXT NOT NULL,
-        targetTimestamp INTEGER NOT NULL,
-        triggerSent INTEGER NOT NULL DEFAULT 0
-      )
-    `);
-  });
-
-  return db;
+async function runDb(query, params = []) {
+  const db = await ensureDb();
+  db.run(query, params);
+  persistDb();
+  return { changes: db.getRowsModified() };
 }
 
-function runDb(query, params = []) {
-  return new Promise((resolve, reject) => {
-    const db = initializeDb();
-    db.run(query, params, function (error) {
-      db.close();
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(this);
-    });
-  });
-}
+async function getDbRows(query, params = []) {
+  const db = await ensureDb();
+  const statement = db.prepare(query);
+  const rows = [];
 
-function getDbRows(query, params = []) {
-  return new Promise((resolve, reject) => {
-    const db = initializeDb();
-    db.all(query, params, (error, rows) => {
-      db.close();
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(rows);
-    });
-  });
+  statement.bind(params);
+  while (statement.step()) {
+    rows.push(statement.getAsObject());
+  }
+  statement.free();
+
+  return rows;
 }
 
 async function addSchedule({ guildId, channelId, userId, message, date, time, targetTimestamp }) {
@@ -84,8 +105,13 @@ async function listSchedules(guildId) {
 }
 
 async function removeSchedule(id, guildId) {
-  const result = await runDb(`DELETE FROM reminders WHERE id = ? AND guildId = ?`, [id, guildId]);
-  return result.changes > 0;
+  const existing = await getDbRows(`SELECT id FROM reminders WHERE id = ? AND guildId = ?`, [id, guildId]);
+  if (existing.length === 0) {
+    return false;
+  }
+
+  await runDb(`DELETE FROM reminders WHERE id = ? AND guildId = ?`, [id, guildId]);
+  return true;
 }
 
 async function markTriggered(id) {
