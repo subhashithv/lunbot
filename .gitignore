@@ -4,6 +4,9 @@ node_modules/
 # Environment variables
 .env
 
+# Runtime reminder data
+data/
+
 # Logs
 logs
 *.log

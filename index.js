@@ -13,6 +13,7 @@ EmbedBuilder
 } = require("discord.js");
 
 const fightCommand = require("./commands/fight");
+const notifyCommand = require("./commands/notify");
 
 const {
 getGame,
@@ -20,6 +21,8 @@ setMove,
 resetMoves,
 deleteGame
 } = require("./systems/gameManager");
+
+const { startNotificationScheduler } = require("./systems/notifications");
 
 const { resolveRound } = require("./systems/roundResolver");
 const { startRound } = require("./systems/roundUI");
@@ -58,6 +61,8 @@ client.once("ready",()=>{
 console.log(`Logged in as ${client.user.tag}`);
 console.log(`Bot connected to ${client.guilds.cache.size} servers`);
 
+startNotificationScheduler(client);
+
 setInterval(()=>{
 console.log(`[HEARTBEAT] Bot running at ${new Date().toISOString()}`);
 },300000);
@@ -71,6 +76,10 @@ if(interaction.isChatInputCommand()){
 
 if(interaction.commandName==="fight"){
 await fightCommand.execute(interaction);
+}
+
+if(interaction.commandName==="notify"){
+await notifyCommand.execute(interaction);
 }
 
 }
