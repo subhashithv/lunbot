@@ -5,6 +5,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName("notify")
     .setDescription("Manage scheduled reminders")
+    .setDMPermission(false)
     .addStringOption((option) =>
       option
         .setName("action")
@@ -18,8 +19,17 @@ module.exports = {
     )
     .addStringOption((option) =>
       option
+        .setName("repeat")
+        .setDescription("Choose one-time or daily reminder")
+        .addChoices(
+          { name: "One-time", value: "once" },
+          { name: "Daily", value: "daily" }
+        )
+    )
+    .addStringOption((option) =>
+      option
         .setName("date")
-        .setDescription("UTC date for the reminder (YYYY-MM-DD)")
+        .setDescription("UTC date for one-time reminders (YYYY-MM-DD)")
     )
     .addStringOption((option) =>
       option
@@ -29,7 +39,12 @@ module.exports = {
     .addStringOption((option) =>
       option
         .setName("message")
-        .setDescription("Message to send with the ping")
+        .setDescription("Message to send with the reminder")
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("mention")
+        .setDescription("Mention the reminder creator in the notification")
     )
     .addStringOption((option) =>
       option
@@ -38,15 +53,29 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const allowedUserId = process.env.OWNER_USER_ID || process.env.USER_ID;
+
+    if (allowedUserId && interaction.user.id !== allowedUserId) {
+      await interaction.reply({ content: "Only the command creator can use this command.", ephemeral: true });
+      return;
+    }
+
     const action = interaction.options.getString("action");
+    const repeat = interaction.options.getString("repeat");
     const date = interaction.options.getString("date");
     const time = interaction.options.getString("time");
     const message = interaction.options.getString("message");
+    const mention = interaction.options.getBoolean("mention") || false;
     const id = interaction.options.getString("id");
 
     if (action === "add") {
-      if (!time || !message) {
-        await interaction.reply({ content: "Please provide both a time and a message for adding a reminder.", ephemeral: true });
+      if (!time || !message || !repeat) {
+        await interaction.reply({ content: "Please provide a repeat option, time, and message for adding a reminder.", ephemeral: true });
+        return;
+      }
+
+      if (repeat === "once" && !date) {
+        await interaction.reply({ content: "Please provide a date for a one-time reminder.", ephemeral: true });
         return;
       }
 
@@ -57,14 +86,24 @@ module.exports = {
           userId: interaction.user.id,
           message,
           date,
-          time
+          time,
+          repeat,
+          mention
         });
 
         const embed = new EmbedBuilder()
           .setColor("#2ecc71")
           .setTitle("✅ Reminder scheduled")
-          .setDescription(`Your reminder is set for UTC ${schedule.date} ${schedule.time} in this channel.`)
-          .addFields({ name: "Reminder ID", value: schedule.id });
+          .setDescription(
+            repeat === "daily"
+              ? `Daily reminder set for UTC ${schedule.time} in this channel.`
+              : `One-time reminder set for UTC ${schedule.date} ${schedule.time} in this channel.`
+          )
+          .addFields(
+            { name: "Reminder ID", value: schedule.id, inline: true },
+            { name: "Repeat", value: repeat === "daily" ? "Daily" : "One-time", inline: true },
+            { name: "Mention Creator", value: mention ? "Yes" : "No", inline: true }
+          );
 
         await interaction.reply({ embeds: [embed] });
       } catch (error) {
@@ -85,7 +124,15 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor("#3498db")
         .setTitle("📋 Your reminders")
-        .setDescription(userSchedules.map((item) => `• UTC ${item.date} ${item.time} — ${item.message} (ID: ${item.id})`).join("\n"));
+        .setDescription(
+          userSchedules
+            .map((item) => {
+              const typeLabel = item.repeat === "daily" ? `Daily at ${item.time}` : `Once on ${item.date} ${item.time}`;
+              const mentionLabel = item.mention ? "Yes" : "No";
+              return `• ${typeLabel} — ${item.message} (Mention creator: ${mentionLabel})\nID: ${item.id}`;
+            })
+            .join("\n\n")
+        );
 
       await interaction.reply({ embeds: [embed] });
       return;

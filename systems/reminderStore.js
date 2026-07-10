@@ -24,6 +24,14 @@ async function loadSqlModule() {
   return sqlModule;
 }
 
+function getExistingColumns(db, tableName) {
+  const result = db.exec(`PRAGMA table_info(${tableName})`);
+  if (!result || !result[0]) {
+    return [];
+  }
+  return result[0].values.map((row) => row[1]);
+}
+
 async function ensureDb() {
   if (database && activeDbPath === dbPath) {
     return database;
@@ -48,12 +56,26 @@ async function ensureDb() {
       channelId TEXT NOT NULL,
       userId TEXT NOT NULL,
       message TEXT NOT NULL,
-      date TEXT NOT NULL,
+      date TEXT,
       time TEXT NOT NULL,
-      targetTimestamp INTEGER NOT NULL,
+      targetTimestamp INTEGER,
+      repeat TEXT NOT NULL DEFAULT 'once',
+      mention INTEGER NOT NULL DEFAULT 0,
+      lastTriggeredDate TEXT,
       triggerSent INTEGER NOT NULL DEFAULT 0
     )
   `);
+
+  const existingColumns = getExistingColumns(database, "reminders");
+  if (!existingColumns.includes("repeat")) {
+    database.run(`ALTER TABLE reminders ADD COLUMN repeat TEXT NOT NULL DEFAULT 'once'`);
+  }
+  if (!existingColumns.includes("mention")) {
+    database.run(`ALTER TABLE reminders ADD COLUMN mention INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!existingColumns.includes("lastTriggeredDate")) {
+    database.run(`ALTER TABLE reminders ADD COLUMN lastTriggeredDate TEXT`);
+  }
 
   persistDb();
   return database;
@@ -89,15 +111,18 @@ async function getDbRows(query, params = []) {
   return rows;
 }
 
-async function addSchedule({ guildId, channelId, userId, message, date, time, targetTimestamp }) {
+async function addSchedule({ guildId, channelId, userId, message, date, time, targetTimestamp, repeat, mention }) {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const normalizedRepeat = repeat || "once";
+  const normalizedMention = mention ? 1 : 0;
+  const normalizedDate = date ?? null;
 
   await runDb(
-    `INSERT INTO reminders (id, guildId, channelId, userId, message, date, time, targetTimestamp, triggerSent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-    [id, guildId, channelId, userId, message, date, time, targetTimestamp]
+    `INSERT INTO reminders (id, guildId, channelId, userId, message, date, time, targetTimestamp, repeat, mention, triggerSent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    [id, guildId, channelId, userId, message, normalizedDate, time, targetTimestamp, normalizedRepeat, normalizedMention]
   );
 
-  return { id, guildId, channelId, userId, message, date, time, targetTimestamp, triggerSent: 0 };
+  return { id, guildId, channelId, userId, message, date: normalizedDate, time, targetTimestamp, repeat: normalizedRepeat, mention: Boolean(normalizedMention), triggerSent: 0 };
 }
 
 async function listSchedules(guildId) {
@@ -114,12 +139,22 @@ async function removeSchedule(id, guildId) {
   return true;
 }
 
-async function markTriggered(id) {
+async function markTriggered(id, repeat) {
+  if (repeat === "daily") {
+    const now = new Date();
+    const utcDate = new Date(now.getTime() + now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+
+    await runDb(`UPDATE reminders SET lastTriggeredDate = ? WHERE id = ?`, [utcDate, id]);
+    return;
+  }
+
   await runDb(`UPDATE reminders SET triggerSent = 1 WHERE id = ?`, [id]);
 }
 
 async function getPendingSchedules() {
-  return getDbRows(`SELECT * FROM reminders WHERE triggerSent = 0`);
+  return getDbRows(`SELECT * FROM reminders WHERE repeat = 'daily' OR triggerSent = 0`);
 }
 
 module.exports = {

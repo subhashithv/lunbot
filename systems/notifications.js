@@ -26,7 +26,7 @@ function parseUtcTargetTimestamp(dateString, timeString) {
   return Date.UTC(year, month - 1, day, hours, minutes, 0);
 }
 
-async function addSchedule({ guildId, channelId, userId, message, date, time }) {
+async function addSchedule({ guildId, channelId, userId, message, date, time, repeat, mention }) {
   if (!guildId || !channelId || !userId) {
     throw new Error("This command must be used in a server channel.");
   }
@@ -35,9 +35,16 @@ async function addSchedule({ guildId, channelId, userId, message, date, time }) 
     throw new Error("Time must be in HH:MM 24-hour format.");
   }
 
-  const normalizedDate = date || getUtcDateString();
-  if (!isValidDate(normalizedDate)) {
-    throw new Error("Date must be in YYYY-MM-DD format.");
+  const normalizedRepeat = repeat === "daily" ? "daily" : "once";
+  let normalizedDate = null;
+  let targetTimestamp = null;
+
+  if (normalizedRepeat === "once") {
+    normalizedDate = date || getUtcDateString();
+    if (!isValidDate(normalizedDate)) {
+      throw new Error("Date must be in YYYY-MM-DD format.");
+    }
+    targetTimestamp = parseUtcTargetTimestamp(normalizedDate, time);
   }
 
   return saveSchedule({
@@ -47,7 +54,9 @@ async function addSchedule({ guildId, channelId, userId, message, date, time }) 
     message,
     date: normalizedDate,
     time,
-    targetTimestamp: parseUtcTargetTimestamp(normalizedDate, time)
+    targetTimestamp,
+    repeat: normalizedRepeat,
+    mention: Boolean(mention)
   });
 }
 
@@ -61,12 +70,27 @@ async function removeSchedule(id, guildId) {
 }
 
 function isDue(schedule, now) {
-  if (schedule.targetTimestamp) {
-    return now.getTime() >= schedule.targetTimestamp;
+  const [hours, minutes] = schedule.time.split(":").map(Number);
+  const scheduleUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes, 0);
+  const today = new Date(now.getTime() + now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+  if (schedule.repeat === "daily") {
+    if (now.getTime() < scheduleUtc || now.getTime() >= scheduleUtc + 60000) {
+      return false;
+    }
+
+    if (schedule.lastTriggeredDate === today) {
+      return false;
+    }
+
+    return true;
   }
 
-  const [hours, minutes] = schedule.time.split(":").map(Number);
-  return now.getUTCHours() === hours && now.getUTCMinutes() === minutes;
+  if (!schedule.targetTimestamp) {
+    return false;
+  }
+
+  return now.getTime() >= schedule.targetTimestamp;
 }
 
 function startNotificationScheduler(client) {
@@ -84,11 +108,17 @@ function startNotificationScheduler(client) {
         continue;
       }
 
+      const content = schedule.mention
+        ? `<@${schedule.userId}> ${schedule.message}`
+        : schedule.message;
       channel
-        .send({ content: `<@${schedule.userId}> ${schedule.message}` })
+        .send({
+          content,
+          allowedMentions: { parse: ["users", "roles"] }
+        })
         .catch((error) => console.error("Failed to send scheduled notification:", error));
 
-      await markTriggered(schedule.id);
+      await markTriggered(schedule.id, schedule.repeat);
     }
   }, 15000);
 }

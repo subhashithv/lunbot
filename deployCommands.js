@@ -1,34 +1,24 @@
 const { REST, Routes } = require("discord.js");
 require("dotenv").config();
 
-const fightCommand = require("./commands/fight");
 const notifyCommand = require("./commands/notify");
 
 const commands = [
-{
-name:"fight",
-description:"Start a boxing match",
-options:[
-{
-name:"user",
-description:"Opponent",
-type:6,
-required:true
-}
-]
-},
-notifyCommand.data.toJSON()
+  notifyCommand.data.toJSON()
 ];
 
-const rest = new REST({version:"10"}).setToken(process.env.TOKEN);
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
-(async()=>{
+(async () => {
+  const guildId = process.env.GUILD_ID;
 
-await rest.put(
-Routes.applicationCommands(process.env.CLIENT_ID),
-{body:commands}
-);
+  if (!guildId) {
+    console.error("GUILD_ID is not set. Please set it in your .env file for guild-scoped commands.");
+    process.exit(1);
+  }
 
-console.log("Global commands deployed.");
+  const route = Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId);
+  await rest.put(route, { body: commands });
 
+  console.log(`Guild commands deployed for ${guildId}.`);
 })();
