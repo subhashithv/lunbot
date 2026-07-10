@@ -17,6 +17,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
     ? Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId)
     : Routes.applicationCommands(process.env.CLIENT_ID);
 
+  await rest.put(route, { body: [] });
   await rest.put(route, { body: commands });
 
   console.log(guildId ? `Guild commands deployed for ${guildId}.` : "Global commands deployed.");
