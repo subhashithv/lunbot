@@ -1,7 +1,7 @@
 {
   "name": "lunbot",
   "version": "1.0.0",
-  "description": "Discord boxing chat game bot",
+  "description": "Small Discord reminder notification bot",
   "main": "index.js",
   "type": "commonjs",
   "scripts": {
@@ -13,8 +13,8 @@
   "keywords": [
     "discord",
     "bot",
-    "game",
-    "boxing"
+    "reminder",
+    "notifications"
   ],
   "author": "Ash",
   "license": "ISC",
