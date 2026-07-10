@@ -1,33 +1,10 @@
-const fs = require("fs");
-const path = require("path");
-
-const notificationsFile = path.join(__dirname, "..", "data", "notifications.json");
-const schedules = loadSchedules();
-
-function ensureFile() {
-  fs.mkdirSync(path.dirname(notificationsFile), { recursive: true });
-  if (!fs.existsSync(notificationsFile)) {
-    fs.writeFileSync(notificationsFile, "[]", "utf8");
-  }
-}
-
-function loadSchedules() {
-  ensureFile();
-
-  try {
-    const raw = fs.readFileSync(notificationsFile, "utf8");
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Could not load notifications:", error);
-    return [];
-  }
-}
-
-function saveSchedules() {
-  ensureFile();
-  fs.writeFileSync(notificationsFile, JSON.stringify(schedules, null, 2), "utf8");
-}
+const {
+  addSchedule: saveSchedule,
+  listSchedules: loadSchedules,
+  removeSchedule: deleteSchedule,
+  markTriggered,
+  getPendingSchedules
+} = require("./reminderStore");
 
 function isValidTime(timeString) {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(timeString);
@@ -49,7 +26,7 @@ function parseUtcTargetTimestamp(dateString, timeString) {
   return Date.UTC(year, month - 1, day, hours, minutes, 0);
 }
 
-function addSchedule({ guildId, channelId, userId, message, date, time }) {
+async function addSchedule({ guildId, channelId, userId, message, date, time }) {
   if (!guildId || !channelId || !userId) {
     throw new Error("This command must be used in a server channel.");
   }
@@ -63,39 +40,24 @@ function addSchedule({ guildId, channelId, userId, message, date, time }) {
     throw new Error("Date must be in YYYY-MM-DD format.");
   }
 
-  const schedule = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  return saveSchedule({
     guildId,
     channelId,
     userId,
     message,
     date: normalizedDate,
     time,
-    targetTimestamp: parseUtcTargetTimestamp(normalizedDate, time),
-    triggerSent: false
-  };
-
-  schedules.push(schedule);
-  saveSchedules();
-  return schedule;
+    targetTimestamp: parseUtcTargetTimestamp(normalizedDate, time)
+  });
 }
 
-function listSchedules(guildId) {
-  return schedules.filter((schedule) => schedule.guildId === guildId);
+async function listSchedules(guildId) {
+  const rows = await loadSchedules(guildId);
+  return rows.map((row) => ({ ...row, triggerSent: Boolean(row.triggerSent) }));
 }
 
-function removeSchedule(id, guildId) {
-  const index = schedules.findIndex(
-    (schedule) => schedule.id === id && schedule.guildId === guildId
-  );
-
-  if (index === -1) {
-    return false;
-  }
-
-  schedules.splice(index, 1);
-  saveSchedules();
-  return true;
+async function removeSchedule(id, guildId) {
+  return deleteSchedule(id, guildId);
 }
 
 function isDue(schedule, now) {
@@ -108,17 +70,11 @@ function isDue(schedule, now) {
 }
 
 function startNotificationScheduler(client) {
-  setInterval(() => {
+  setInterval(async () => {
     const now = new Date();
+    const schedules = await getPendingSchedules();
 
-    for (let index = schedules.length - 1; index >= 0; index--) {
-      const schedule = schedules[index];
-
-      if (schedule.triggerSent) {
-        schedules.splice(index, 1);
-        continue;
-      }
-
+    for (const schedule of schedules) {
       if (!isDue(schedule, now)) {
         continue;
       }
@@ -132,9 +88,7 @@ function startNotificationScheduler(client) {
         .send({ content: `<@${schedule.userId}> ${schedule.message}` })
         .catch((error) => console.error("Failed to send scheduled notification:", error));
 
-      schedule.triggerSent = true;
-      schedules.splice(index, 1);
-      saveSchedules();
+      await markTriggered(schedule.id);
     }
   }, 15000);
 }

@@ -51,7 +51,7 @@ module.exports = {
       }
 
       try {
-        const schedule = addSchedule({
+        const schedule = await addSchedule({
           guildId: interaction.guildId,
           channelId: interaction.channelId,
           userId: interaction.user.id,
@@ -74,7 +74,7 @@ module.exports = {
     }
 
     if (action === "list") {
-      const schedules = listSchedules(interaction.guildId);
+      const schedules = await listSchedules(interaction.guildId);
       const userSchedules = schedules.filter((item) => item.userId === interaction.user.id);
 
       if (!userSchedules.length) {
@@ -97,7 +97,7 @@ module.exports = {
         return;
       }
 
-      const removed = removeSchedule(id, interaction.guildId);
+      const removed = await removeSchedule(id, interaction.guildId);
 
       if (!removed) {
         await interaction.reply({ content: "That reminder ID was not found.", ephemeral: true });
