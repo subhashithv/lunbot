@@ -65,7 +65,15 @@ module.exports = {
     const date = interaction.options.getString("date");
     const time = interaction.options.getString("time");
     const message = interaction.options.getString("message");
-    const mention = interaction.options.getBoolean("mention") || false;
+    const mentionOption = interaction.options.get("mention");
+    let mention = false;
+    if (mentionOption) {
+      if (mentionOption.type === 5) {
+        mention = interaction.options.getBoolean("mention") ?? false;
+      } else {
+        mention = Boolean(interaction.options.getString("mention"));
+      }
+    }
     const id = interaction.options.getString("id");
 
     if (action === "add") {
