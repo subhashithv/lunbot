@@ -31,7 +31,7 @@ async function addSchedule({ guildId, channelId, userId, message, date, time, re
     throw new Error("This command must be used in a server channel.");
   }
 
-  if (!isValidTime(time)) {
+  if (!time || !isValidTime(time)) {
     throw new Error("Time must be in HH:MM 24-hour format.");
   }
 

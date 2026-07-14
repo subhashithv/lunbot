@@ -1,24 +1,34 @@
 const { EmbedBuilder } = require("discord.js");
 const { getPendingReminders, markTriggered } = require("./reminderStore");
 
-function getDayName(date) {
-  return date.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+function getUtcWeekday(date) {
+  return [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday"
+  ][date.getUTCDay()];
 }
 
 function isDue(reminder, now) {
+  if (!reminder?.time || !/^([01]\d|2[0-3]):([0-5]\d)$/.test(reminder.time)) {
+    return false;
+  }
+
   const [hours, minutes] = reminder.time.split(":").map(Number);
-  const today = new Date(now.getTime() + now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const scheduleUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes, 0);
+  const todayUtc = now.toISOString().slice(0, 10);
 
   if (reminder.repeat === "daily") {
-    const scheduleUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes, 0);
-    return now.getTime() >= scheduleUtc && now.getTime() < scheduleUtc + 60000 && reminder.lastTriggeredDate !== today;
+    return now.getTime() >= scheduleUtc && reminder.lastTriggeredDate !== todayUtc;
   }
 
   if (reminder.repeat === "weekly") {
-    const weekday = getDayName(now);
-    if (reminder.weekday !== weekday) return false;
-    const scheduleUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes, 0);
-    return now.getTime() >= scheduleUtc && now.getTime() < scheduleUtc + 60000 && reminder.lastTriggeredDate !== today;
+    const weekday = getUtcWeekday(now);
+    return now.getTime() >= scheduleUtc && reminder.weekday === weekday && reminder.lastTriggeredDate !== todayUtc;
   }
 
   if (!reminder.targetTimestamp) return false;
@@ -44,29 +54,34 @@ function buildMention(reminder, client) {
 
 function startScheduler(client) {
   setInterval(async () => {
-    const now = new Date();
-    const reminders = await getPendingReminders();
+    try {
+      const now = new Date();
+      const reminders = await getPendingReminders();
 
-    for (const reminder of reminders) {
-      if (!isDue(reminder, now)) continue;
+      for (const reminder of reminders) {
+        if (!isDue(reminder, now)) continue;
 
-      const channel = client.channels.cache.get(reminder.channelId);
-      if (!channel?.isTextBased?.()) continue;
+        const channel = (await client.channels.fetch(reminder.channelId).catch(() => null)) || client.channels.cache.get(reminder.channelId);
+        if (!channel?.isTextBased?.()) continue;
 
-      try {
-        const permissions = channel.permissionsFor(client.user.id);
-        if (!permissions?.has("SendMessages")) continue;
-      } catch {
-        continue;
+        try {
+          const permissions = channel.permissionsFor(client.user.id);
+          if (!permissions?.has("SendMessages")) continue;
+        } catch {
+          continue;
+        }
+
+        const content = buildMention(reminder, client);
+        try {
+          await channel.send({ content, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+        } catch (error) {
+          console.error("Failed to send scheduled reminder:", error);
+          continue;
+        }
+        await markTriggered(reminder.id, reminder.repeat);
       }
-
-      const content = buildMention(reminder, client);
-      try {
-        await channel.send({ content, allowedMentions: { parse: ["users", "roles", "everyone"] } });
-      } catch {
-        continue;
-      }
-      await markTriggered(reminder.id, reminder.repeat);
+    } catch (error) {
+      console.error("Scheduler error:", error);
     }
   }, 15000);
 }

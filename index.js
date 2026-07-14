@@ -5,8 +5,8 @@ process.on("uncaughtException", console.error);
 
 const express = require("express");
 const { Client, GatewayIntentBits } = require("discord.js");
-const { execute } = require("./notify");
-const { startScheduler } = require("./scheduler");
+const { execute } = require("./commands/notify");
+const { startNotificationScheduler } = require("./systems/notifications");
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const app = express();
@@ -23,7 +23,7 @@ setInterval(() => {
 
 client.once("ready", () => {
   console.log(`Logged in as ${client.user.tag}`);
-  startScheduler(client);
+  startNotificationScheduler(client);
 });
 
 client.on("interactionCreate", async (interaction) => {

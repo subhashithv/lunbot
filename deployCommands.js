@@ -1,7 +1,7 @@
 const { REST, Routes } = require("discord.js");
 require("dotenv").config();
 
-const { notifyCommand } = require("./notify");
+const { notifyCommand } = require("./commands/notify");
 
 const commands = [notifyCommand.toJSON()];
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
