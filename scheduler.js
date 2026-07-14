@@ -53,8 +53,19 @@ function startScheduler(client) {
       const channel = client.channels.cache.get(reminder.channelId);
       if (!channel?.isTextBased?.()) continue;
 
+      try {
+        const permissions = channel.permissionsFor(client.user.id);
+        if (!permissions?.has("SendMessages")) continue;
+      } catch {
+        continue;
+      }
+
       const content = buildMention(reminder, client);
-      channel.send({ content, allowedMentions: { parse: ["users", "roles", "everyone"] } }).catch(() => {});
+      try {
+        await channel.send({ content, allowedMentions: { parse: ["users", "roles", "everyone"] } });
+      } catch {
+        continue;
+      }
       await markTriggered(reminder.id, reminder.repeat);
     }
   }, 15000);

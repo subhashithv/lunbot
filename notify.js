@@ -77,7 +77,17 @@ async function execute(interaction) {
     return;
   }
 
-  const subcommand = interaction.options.getSubcommand();
+  let subcommand;
+  try {
+    subcommand = interaction.options.getSubcommand();
+  } catch {
+    subcommand = null;
+  }
+
+  if (!subcommand) {
+    await interaction.reply({ content: "Please choose a subcommand: add, list, edit, or remove.", ephemeral: true });
+    return;
+  }
 
   if (subcommand === "add") {
     const repeat = interaction.options.getString("repeat");

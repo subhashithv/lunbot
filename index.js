@@ -15,6 +15,12 @@ app.get("/", (_req, res) => res.send("LunBot is running"));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Web server listening on ${PORT}`));
 
+const HEARTBEAT_INTERVAL = Number(process.env.HEARTBEAT_INTERVAL) || 20000;
+console.log(`Heartbeat interval set to ${HEARTBEAT_INTERVAL}ms`);
+setInterval(() => {
+  console.log(`Heartbeat: LunBot alive ${new Date().toISOString()}`);
+}, HEARTBEAT_INTERVAL);
+
 client.once("ready", () => {
   console.log(`Logged in as ${client.user.tag}`);
   startScheduler(client);
